@@ -137,7 +137,7 @@ async function commitImport(importId, groupId, userId) {
   // Process in transaction
   await prisma.$transaction(async (tx) => {
     for (const row of rows) {
-      if (skipRows.has(row.rowNumber)) continue;
+      if (skipRows.has(row.rowNumber) && !convertToSettlement.has(row.rowNumber)) continue;
 
       try {
         // Apply corrections

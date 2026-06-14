@@ -73,6 +73,6 @@
 | Currency | Treatment |
 |----------|-----------|
 | INR | Base currency. Exchange rate = 1.0 |
-| USD | Converted at rate specified during import (default: ₹84.50/USD) |
+| USD | Converted at rate specified during import (default: ₹92.32/USD) |
 
 **USD Expenses in CSV**: Rows 20, 21, 23, 26 (total: $744 before refund)

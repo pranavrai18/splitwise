@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  memberships      Membership[]
+  paidExpenses     Expense[]            @relation("PaidBy")
+  participations   ExpenseParticipant[]
+  settlementsFrom  Settlement[]         @relation("FromUser")
+  settlementsTo    Settlement[]         @relation("ToUser")
+  auditLogs        AuditLog[]
+  imports          Import[]
+  createdGroups    Group[]              @relation("CreatedBy")
+
+  @@map("users")
+}
+
+model Group {
+  id           String   @id @default(uuid())
+  name         String
+  baseCurrency String   @default("INR") @map("base_currency")
+  createdById  String   @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  createdBy   User         @relation("CreatedBy", fields: [createdById], references: [id])
+  memberships Membership[]
+  expenses    Expense[]
+  settlements Settlement[]
+  imports     Import[]
+  auditLogs   AuditLog[]
+
+  @@map("groups")
+}
+
+model Membership {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  groupId   String    @map("group_id")
+  role      String    @default("member")
+  joinDate  DateTime  @map("join_date")
+  leaveDate DateTime? @map("leave_date")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id])
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@unique([userId, groupId, joinDate])
+  @@map("memberships")
+}
+
+model Expense {
+  id           String   @id @default(uuid())
+  groupId      String   @map("group_id")
+  paidById     String   @map("paid_by")
+  amount       Decimal  @db.Decimal(12, 2)
+  currency     String   @default("INR")
+  exchangeRate Decimal  @default(1) @map("exchange_rate") @db.Decimal(10, 4)
+  baseAmount   Decimal  @map("base_amount") @db.Decimal(12, 2)
+  description  String
+  expenseDate  DateTime @map("expense_date")
+  splitType    String   @map("split_type")
+  notes        String?
+  importId     String?  @map("import_id")
+  isDeleted    Boolean  @default(false) @map("is_deleted")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  group        Group                @relation(fields: [groupId], references: [id])
+  paidBy       User                 @relation("PaidBy", fields: [paidById], references: [id])
+  import       Import?              @relation(fields: [importId], references: [id])
+  participants ExpenseParticipant[]
+
+  @@map("expenses")
+}
+
+model ExpenseParticipant {
+  id              String   @id @default(uuid())
+  expenseId       String   @map("expense_id")
+  userId          String   @map("user_id")
+  shareAmount     Decimal  @map("share_amount") @db.Decimal(12, 2)
+  sharePercentage Decimal? @map("share_percentage") @db.Decimal(5, 2)
+  shareUnits      Int?     @map("share_units")
+
+  expense Expense @relation(fields: [expenseId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([expenseId, userId])
+  @@map("expense_participants")
+}
+
+model Settlement {
+  id           String   @id @default(uuid())
+  groupId      String   @map("group_id")
+  fromUserId   String   @map("from_user_id")
+  toUserId     String   @map("to_user_id")
+  amount       Decimal  @db.Decimal(12, 2)
+  currency     String   @default("INR")
+  exchangeRate Decimal  @default(1) @map("exchange_rate") @db.Decimal(10, 4)
+  baseAmount   Decimal  @map("base_amount") @db.Decimal(12, 2)
+  notes        String?
+  importId     String?  @map("import_id")
+  settledAt    DateTime @map("settled_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  group    Group   @relation(fields: [groupId], references: [id])
+  fromUser User    @relation("FromUser", fields: [fromUserId], references: [id])
+  toUser   User    @relation("ToUser", fields: [toUserId], references: [id])
+  import   Import? @relation(fields: [importId], references: [id])
+
+  @@map("settlements")
+}
+
+model Import {
+  id            String   @id @default(uuid())
+  groupId       String   @map("group_id")
+  uploadedById  String   @map("uploaded_by")
+  filename      String
+  status        String   @default("pending")
+  totalRows     Int      @default(0) @map("total_rows")
+  processedRows Int      @default(0) @map("processed_rows")
+  anomalyCount  Int      @default(0) @map("anomaly_count")
+  rawData       Json?    @map("raw_data")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  group       Group           @relation(fields: [groupId], references: [id])
+  uploadedBy  User            @relation(fields: [uploadedById], references: [id])
+  anomalies   ImportAnomaly[]
+  expenses    Expense[]
+  settlements Settlement[]
+
+  @@map("imports")
+}
+
+model ImportAnomaly {
+  id              String    @id @default(uuid())
+  importId        String    @map("import_id")
+  rowNumber       Int       @map("row_number")
+  type            String
+  severity        String
+  description     String
+  suggestedAction String    @map("suggested_action")
+  userDecision    String?   @map("user_decision")
+  originalData    Json      @map("original_data")
+  correctedData   Json?     @map("corrected_data")
+  resolvedAt      DateTime? @map("resolved_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  import Import @relation(fields: [importId], references: [id])
+
+  @@map("import_anomalies")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?  @map("user_id")
+  groupId    String?  @map("group_id")
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  action     String
+  beforeData Json?    @map("before_data")
+  afterData  Json?    @map("after_data")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user  User?  @relation(fields: [userId], references: [id])
+  group Group? @relation(fields: [groupId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
